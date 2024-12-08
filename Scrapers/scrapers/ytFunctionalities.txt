@@ -1,0 +1,80 @@
+1. search().list()
+Purpose: Search for videos, channels, or playlists based on a query.
+Key Parameters:
+q: Search term (e.g., "coding tutorials").
+type: Result type (video, channel, playlist).
+part: Specifies the fields to include (snippet is common).
+maxResults: Number of results per request (default: 5, max: 50).
+Response: Metadata about search results, including video IDs, titles, descriptions, and channels.
+2. videos().list()
+Purpose: Get detailed information about specific videos.
+Key Parameters:
+id: Comma-separated list of video IDs.
+part: Fields to include (snippet, statistics, contentDetails, etc.).
+Response: Metadata about the videos, including title, description, view count, duration, and tags.
+3. channels().list()
+Purpose: Fetch information about YouTube channels.
+Key Parameters:
+id: Channel ID(s).
+forUsername: Channel username (if available).
+part: Fields to include (snippet, statistics, contentDetails).
+Response: Metadata about the channel, including name, description, subscriber count, and upload playlist ID.
+4. playlistItems().list()
+Purpose: Retrieve videos in a specific playlist.
+Key Parameters:
+playlistId: The ID of the playlist.
+part: Fields to include (snippet, contentDetails).
+maxResults: Number of results to fetch.
+Response: List of videos in the playlist, including video IDs, titles, and descriptions.
+5. playlists().list()
+Purpose: Retrieve playlists from a channel.
+Key Parameters:
+channelId: The ID of the channel.
+part: Fields to include (snippet, contentDetails).
+maxResults: Number of results to fetch.
+Response: List of playlists, including titles, descriptions, and IDs.
+6. commentThreads().list()
+Purpose: Fetch comments for a video.
+Key Parameters:
+videoId: The ID of the video.
+part: Fields to include (snippet, replies).
+maxResults: Number of comments to fetch.
+Response: List of comments and replies, including authors and text.
+7. captions().list()
+Purpose: Retrieve captions (subtitles) for a video.
+Key Parameters:
+videoId: The ID of the video.
+part: Fields to include (snippet).
+Response: List of captions and their metadata (e.g., language).
+8. subscriptions().list()
+Purpose: Fetch subscriptions for a channel.
+Key Parameters:
+channelId: The ID of the channel.
+part: Fields to include (snippet).
+maxResults: Number of subscriptions to fetch.
+Response: List of subscriptions, including channel details.
+9. activities().list()
+Purpose: Retrieve recent activities for a channel.
+Key Parameters:
+channelId: The ID of the channel.
+part: Fields to include (snippet, contentDetails).
+Response: List of activities (e.g., uploads, likes).
+10. thumbnails().set()
+Purpose: Update the thumbnail for a video.
+Key Parameters:
+videoId: The ID of the video.
+media_body: The new thumbnail image file.
+Response: Confirmation of the updated thumbnail.
+11. reports().query() (YouTube Analytics API)
+Purpose: Retrieve analytics reports for a channel or video.
+Key Parameters:
+ids: Scope of the query (e.g., channel==YOUR_CHANNEL_ID).
+metrics: Metrics to retrieve (e.g., views, watchTime).
+startDate / endDate: Date range for the report.
+Response: Analytics data (e.g., views, watch time, demographics).
+12. liveBroadcasts().list()
+Purpose: Get details about live broadcasts for a channel.
+Key Parameters:
+part: Fields to include (snippet, status).
+broadcastStatus: Filter for active, completed, or upcoming broadcasts.
+Response: List of live broadcasts and their metadata.
