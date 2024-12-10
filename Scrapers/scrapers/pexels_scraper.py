@@ -1,5 +1,8 @@
 import requests
+from pprint import pprint
 from decouple import config 
+import datetime
+import sqlite3
 
 API_Key = config("PEXELS_API_KEY")
 popular_video_endpoint = "https://api.pexels.com/videos/popular"
@@ -14,7 +17,7 @@ video_endpoint = "https://api.pexels.com/videos/search"
     # :return: JSON response with video data
 headers = {"Authorization": API_Key}
 
-def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="large", locale=None, per_page=15, page=1):
+def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="large", locale=None, per_page=2, page=1):
     parameters = {"query":query,
                   "orientation":orientation,
                   "size":size,
@@ -29,14 +32,15 @@ def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="larg
         reset_time = response.headers.get("X-Ratelimit-Reset")
         print(f"Total Quota: {total_quota}")
         print(f"Remaining Quota: {remaining_quota}")
-        print(f"Quota Resets At: {reset_time}")
-        print(response.json())
+        print(f"Quota Resets At: {datetime.datetime.fromtimestamp(int(reset_time))}")
+        print('response')
+        pprint(response.json())
         return response.json()
     else:
         print(f"Error: {response.status_code} - {response.text}")
         return None
 
-def get_popular_video(orientation=None, size="large", locale=None, per_page=15, page=1):
+def get_popular_video(orientation=None, size="large", locale=None, per_page=2, page=1):
     results = get_videos(
         endpoint=popular_video_endpoint,
         orientation=orientation,
@@ -48,6 +52,6 @@ def get_popular_video(orientation=None, size="large", locale=None, per_page=15, 
     if results:
         print(f"Total Results: {results.get('total_results', 0)}")
         for video in results.get("videos", []):
-            print(f"Video ID: {video['id']}, URL: {video['url']}")
+            print(f"Video ID: {video['id']}, URL: {video['url']},Tags {video['tags']}, Duration {video['duration']}")
 
-get_videos(query="cobra snake dancing")
+get_videos(query="monkeys")
