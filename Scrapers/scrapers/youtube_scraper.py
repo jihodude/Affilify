@@ -19,8 +19,8 @@ def get_youtube_video_category_id(API_Key):
         print(f"Error: {response.status_code}, {response.text}")
 
 def initialize_selenium():
-    profile_path = "/path/to/your/chrome/profile"  # Replace with your profile path
-    chromedriver_path = "/path/to/your/chromedriver"  # Replace with your chromedriver path
+    profile_path = "/Users/jihobae/Library/Application Support/Google/Chrome/Default"  # Replace with your profile path
+    chromedriver_path = "/Users/jihobae/Documents/Programming/Selenium Tiktok Manager/Tiktok-Web-Scraping/Untitled/chromedriver"  # Replace with your chromedriver path
 
     options = Options()
     options.add_argument("--no-sandbox")
@@ -156,8 +156,11 @@ def scrape_with_retries(queries, max_retry_attempts=3):
         queries = queries_to_retry
         attempt_number += 1
 
-    pprint("Final videos data:", all_videos_data)
-    pprint("Final bad videos data:", all_bad_videos_data)
+    print("Final videos data:")
+    pprint(all_videos_data)
+    print("Final bad videos data:")
+    pprint(all_bad_videos_data)
+
 
 # Call the function to start processing
 queries = ["gopro hero11 black commercial", "gopro hero11 black functions", "gopro hero11 black advertisement"]
