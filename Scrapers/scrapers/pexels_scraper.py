@@ -3,7 +3,10 @@ from pprint import pprint
 from decouple import config 
 import datetime
 import sqlite3
-
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+import json
 API_Key = config("PEXELS_API_KEY")
 popular_video_endpoint = "https://api.pexels.com/videos/popular"
 video_endpoint = "https://api.pexels.com/videos/search"
@@ -15,8 +18,26 @@ video_endpoint = "https://api.pexels.com/videos/search"
     # :param per_page: Number of results per page (default 15, max 80)
     # :param page: Page number for pagination (default 1)
     # :return: JSON response with video data
+
+def initialize_selenium():
+    profile_path = "/Users/jihobae/Library/Application Support/Google/Chrome/Default"  # Replace with your profile path
+    chromedriver_path = "/Users/jihobae/Documents/Programming/Selenium Tiktok Manager/Tiktok-Web-Scraping/Untitled/chromedriver"  # Replace with your chromedriver path
+
+    options = Options()
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--remote-debugging-port=9222")
+    options.add_argument(f"user-data-dir={profile_path}")
+    options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+    service = Service(executable_path=chromedriver_path)
+    driver = webdriver.Chrome(service=service, options=options)
+    return driver
+
 headers = {"Authorization": API_Key}
 
+
+driver = initialize_selenium()
 def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="large", locale=None, per_page=2, page=1):
     parameters = {"query":query,
                   "orientation":orientation,
@@ -33,12 +54,58 @@ def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="larg
         print(f"Total Quota: {total_quota}")
         print(f"Remaining Quota: {remaining_quota}")
         print(f"Quota Resets At: {datetime.datetime.fromtimestamp(int(reset_time))}")
-        print('response')
-        pprint(response.json())
-        return response.json()
     else:
         print(f"Error: {response.status_code} - {response.text}")
         return None
+    
+    video_dictionary = {}
+    data = response.json()
+    for video in data["videos"]:
+        video_id = video["id"]  # Get the video ID
+        tags = video["tags"]
+        video_link = video["url"]
+        video_files = video.get("video_files", [])  # Get the list of video files
+        video_files_ulr = video_files[0]["link"]
+        descriptive_part = video_link.rstrip('/').split('/')[-1]  # Extract the descriptive part
+        title = ' '.join(descriptive_part.split('-')[:-1])  # Remove the numeric ID par
+
+
+        video_dictionary[video_id] = {
+        "video": 
+        {
+        "search query" : query,
+        "url": video_files_ulr,
+        "url to view" : video_link,
+        "title": title, 
+        "description": None,
+        "tags" : ",".join(tags),
+        "upload_date": None
+        },
+
+        "keywords": 
+        {
+            "entities": None,
+            "adjectives": None,
+            "verbs": None,
+            "nouns": None
+        },
+
+        "sentiment": 
+        {
+            "polarity": None,
+            "adjectives": None,
+        },
+
+        "summary":
+        {
+            "summary": None,
+            "rating_score": None,
+            "suggested_content_type": None
+        }
+
+    }
+            
+    return video_dictionary
 
 def get_popular_video(orientation=None, size="large", locale=None, per_page=2, page=1):
     results = get_videos(
@@ -52,6 +119,7 @@ def get_popular_video(orientation=None, size="large", locale=None, per_page=2, p
     if results:
         print(f"Total Results: {results.get('total_results', 0)}")
         for video in results.get("videos", []):
-            print(f"Video ID: {video['id']}, URL: {video['url']},Tags {video['tags']}, Duration {video['duration']}")
+            print(f"Video ID: {video['id']}, URL: {video['url']}, Tags {video['tags']}, Duration {video['duration']}")
 
-get_videos(query="monkeys")
+pprint(get_videos(query="dirty clothes"))
+pprint(get_videos(query="dirty clothes smelly"))

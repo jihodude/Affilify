@@ -7,17 +7,6 @@ from selenium.webdriver.chrome.options import Options
 import requests
 from typing import List
 
-def get_youtube_video_category_id(API_Key):
-    url = f"https://www.googleapis.com/youtube/v3/videoCategories?part=snippet&regionCode=US&key={API_Key}"
-    response = requests.get(url)
-
-    if response.status_code == 200:
-        data = response.json()
-        for item in data.get("items", []):
-            print(f"Category ID: {item['id']}, Title: {item['snippet']['title']}")
-    else:
-        print(f"Error: {response.status_code}, {response.text}")
-
 def initialize_selenium():
     profile_path = "/Users/jihobae/Library/Application Support/Google/Chrome/Default"  # Replace with your profile path
     chromedriver_path = "/Users/jihobae/Documents/Programming/Selenium Tiktok Manager/Tiktok-Web-Scraping/Untitled/chromedriver"  # Replace with your chromedriver path
@@ -33,6 +22,7 @@ def initialize_selenium():
     driver = webdriver.Chrome(service=service, options=options)
     return driver
 
+global API_Key 
 API_Key = config("YOUTUBE_API_KEY")
 youtube = build("youtube", "v3", developerKey=API_Key)
 driver = initialize_selenium()
@@ -52,7 +42,7 @@ def scrape_youtube_content(
     queries_to_retry = []
     videos_data = {}
     bad_videos_data = {}
-
+    video_dictionary = {}
     for query in queries:
         try:
             print(f"Processing query '{query}' with order '{order}'...")
@@ -65,7 +55,7 @@ def scrape_youtube_content(
                 relevanceLanguage=relevance_language,
                 videoLicense=video_license
             ).execute()
-            
+
             for item in response.get("items", []):
                 video_id = item["id"]["videoId"]
                 if video_id in processed_video_ids:
@@ -73,81 +63,67 @@ def scrape_youtube_content(
                 
                 processed_video_ids.add(video_id)
                 video_link = f"https://www.youtube.com/watch?v={video_id}"
-                driver.get(video_link)
 
-                video_dictionary = {
-                    video_id: {
+                video_dictionary[video_id] = {
+                        "video": 
+                        {
+                        "search query" : query,
                         "url": video_link,
+                        "url to view" : None,
                         "title": item["snippet"].get("title", None),
                         "description": item["snippet"].get("description", None),
-                        "category_id": item.get("id", None),
-                        "thumbnail": item["snippet"]["thumbnails"]["high"].get("url", None),
-                        "upload_date": item["snippet"].get("publishedAt", None),
-
-                        # Keywords and POS tagging (default to None as placeholders for later processing)
-                        "keywords": {
-                            "entities": None,
-                            "POS": {
-                                "verbs": None,
-                                "adjectives": None,
-                                "nouns": None
-                            }
+                        "tags" : None,
+                        "category": None,
+                        "upload_date": item["snippet"].get("publishedAt", None)
                         },
 
-                        # Sentiment analysis placeholders
-                        "sentiment": {
+                        "keywords": 
+                        {
+                            "entities": None,
+                            "adjectives": None,
+                            "verbs": None,
+                            "nouns": None
+                        },
+
+                        "sentiment": 
+                        {
                             "polarity": None,
                             "adjectives": None,
-                            "comment_sentiment": {
-                                "polarity": None,
-                                "adjectives": None
-                            }
                         },
 
-                        # Additional metadata fields
-                        "tags": None,
-                        "transcription_sections": None
-                    }
-                }
+                        "summary":
+                        {
+                            "summary": None,
+                            "rating_score": None,
+                            "suggested_content_type": None
+                        }
 
-                while True:
-                    user_response = input("Is the video good to process? Type 'y' or 'n': ").strip().lower()
-                    if user_response == "y":
-                        videos_data[video_id] = video_dictionary[video_id]
-                        break
-                    elif user_response == "n":
-                        bad_videos_data[video_id] = video_dictionary[video_id]
-                        break
-                    else:
-                        print("Invalid input! Please enter 'y' or 'n'.")
+                    }
+  
         except Exception as e:
             print(f"An error occurred with query '{query}': {e}")
             queries_to_retry.append(query)
     
-    return queries_to_retry, videos_data, bad_videos_data
+    return queries_to_retry, video_dictionary, processed_video_ids
 
 def scrape_with_retries(queries, max_retry_attempts=3):
-    retry_order_sequence = ["relevance", "viewCount", "date"]
+    retry_order_sequence = ["relevance", "viewCount", "rating",  "date"]
     processed_video_ids = set()
-    all_videos_data = {}
-    all_bad_videos_data = {}
+
     attempt_number = 0
 
     while attempt_number < max_retry_attempts:
         current_order = retry_order_sequence[attempt_number % len(retry_order_sequence)]
         print(f"Attempt {attempt_number + 1}: Using order '{current_order}'")
         
-        queries_to_retry, videos_data, bad_videos_data = scrape_youtube_content(
+        queries_to_retry, video_dictionary, processed_video_ids= scrape_youtube_content(
             queries=queries,
-            max_results=2,
+            max_results=1,
             order=current_order,
             relevance_language="en",
             video_license=None,
             processed_video_ids=processed_video_ids
         )
-        
-        all_videos_data.update(videos_data)
-        all_bad_videos_data.update(bad_videos_data)
 
         if not queries_to_retry:
             print("All queries processed successfully.")
@@ -155,13 +131,80 @@ def scrape_with_retries(queries, max_retry_attempts=3):
 
         queries = queries_to_retry
         attempt_number += 1
+    video_dictionary = get_video_info(processed_video_ids,video_dictionary)
 
-    print("Final videos data:")
-    pprint(all_videos_data)
-    print("Final bad videos data:")
-    pprint(all_bad_videos_data)
+    good_videos = {}
+    bad_videos = {}
+
+    for video_id, data in video_dictionary.items():
+        url = data["video"]["url"]
+        driver.get(url)
+        user_input = input("Is this video good? (answer: y or n): ").lower()
+        if user_input == "y":
+            good_videos[video_id] = data
+        elif user_input == "n":
+            bad_videos[video_id] = data
+        else:
+            print("please type valid entry")
+    return good_videos, bad_videos, video_dictionary
+
+def get_video_info(processed_video_ids, video_dictionary):
+    video_id_list = ",".join(processed_video_ids)
+
+    try:
+        response = youtube.videos().list(part="snippet", id=video_id_list).execute()
+    except Exception as e:
+        print(f"Error fetching video info: {e}")
+    try:
+        for item in response["items"]:
+            video_id = item["id"]
+            snippet = item["snippet"]
+            tags = snippet.get("tags", [])
+            
+            # Get categoryId and map to category name
+            category_id = snippet.get("categoryId", "Unknown")
+            category_mapping = get_youtube_video_category_mapping(API_Key)
+            category_name = category_mapping.get(category_id, "Unknown")
+            
+            video_dictionary[video_id]["video"]["tags"] = ",".join(tags)
+            video_dictionary[video_id]["video"]["category"] = category_name
+    except Exception as e:
+        print(f"Error{e}")
+    return video_dictionary
+
+import json
+import os
+
+CACHE_FILE = "category_cache.json"
+
+def get_youtube_video_category_mapping(api_key):
+    # Check if the cache file exists
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r") as f:
+            return json.load(f)
 
 
-# Call the function to start processing
-queries = ["gopro hero11 black commercial", "gopro hero11 black functions", "gopro hero11 black advertisement"]
-scrape_with_retries(queries=queries)
+    category_mapping = {}
+
+    try:
+        response = youtube.videoCategories().list(part="snippet", regionCode="US").execute()
+        for item in response["items"]:
+            category_id = item["id"]
+            category_name = item["snippet"]["title"]
+            category_mapping[category_id] = category_name
+    except Exception as e:
+        print(f"Error fetching category mapping: {e}")
+        return {}
+
+    # Save to cache file
+    with open(CACHE_FILE, "w") as f:
+        json.dump(category_mapping, f)
+
+    return category_mapping
+
+queries = ["video of someone smelling stinky clothes", "stock video of dirty clothes"]
+
+good_videos, bad_videos, video_dictionary = scrape_with_retries(queries=queries)
+
+print("good dictionaries")
+pprint(good_videos)

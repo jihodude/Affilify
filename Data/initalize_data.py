@@ -3,7 +3,7 @@ import os
 
 db_path = os.path.join(os.getcwd(), 'Data', 'video_metadata.db')
 
-conn = sqlite3.connect(":memory:")
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 query = """
@@ -11,14 +11,15 @@ query = """
 CREATE TABLE IF NOT EXISTS video (
     video_id TEXT PRIMARY KEY,  -- Unique identifier for videos
     url TEXT NOT NULL,          -- Video URL
+    tags TEXT,                  -- Video Tags
     title TEXT,                 -- Video title
     description TEXT,           -- Video description
-    category_id INTEGER,        -- Category of the video
-    upload_date TEXT            -- Upload date of the video
+    category TEXT,              -- Youtube Category
+    search_query TEXT,          -- Query used for search
+    upload_date TEXT            -- Upload date of the video (ex: 2018-09-17T12:00:04Z)
 );
 
 CREATE TABLE IF NOT EXISTS keywords (
-    id TEXT PRIMARY KEY,        -- Unique identifier for this table (can match video_id)
     video_id TEXT NOT NULL,     -- Foreign key to reference the video table
     entities TEXT,              -- Extracted entities
     adjectives TEXT,            -- Extracted adjectives
@@ -28,7 +29,6 @@ CREATE TABLE IF NOT EXISTS keywords (
 );
 
 CREATE TABLE IF NOT EXISTS sentiments (
-    id TEXT PRIMARY KEY,        -- Unique identifier (can match video_id)
     video_id TEXT NOT NULL,     -- Foreign key to reference the video table
     polarity REAL,              -- Sentiment polarity (e.g., -1 to 1)
     semantic TEXT,              -- Sentiment semantic description (positive, neutral, negative)
@@ -36,24 +36,17 @@ CREATE TABLE IF NOT EXISTS sentiments (
 );
 
 CREATE TABLE IF NOT EXISTS summary (
-    id TEXT PRIMARY KEY,        -- Unique identifier (can match video_id)
     video_id TEXT NOT NULL,     -- Foreign key to reference the video table
     summary TEXT,               -- Summarized content
     rating_score REAL,          -- Rating score
-    content_type_recommendation TEXT, -- Suggested content type
+    suggested_content_type TEXT, -- Suggested content type
     FOREIGN KEY (video_id) REFERENCES video(video_id) -- Link to video table
 );
         """
 
-# Execute the query
-cursor.executescript(query)  # Use executescript for multiple statements
 
-# Commit the changes
+cursor.executescript(query)
+
 conn.commit()
 
-# Verify if tables are created
-cursor.execute("SELECT * FROM video;")
-print("Tables in the database:", cursor.fetchall())
-
-# Close the connection when done
 conn.close()
