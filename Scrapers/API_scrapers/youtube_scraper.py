@@ -6,32 +6,18 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 import requests
 from typing import List
+from datetime import datetime
 
-def initialize_selenium():
-    profile_path = "/Users/jihobae/Library/Application Support/Google/Chrome/Default"  # Replace with your profile path
-    chromedriver_path = "/Users/jihobae/Documents/Programming/Selenium Tiktok Manager/Tiktok-Web-Scraping/Untitled/chromedriver"  # Replace with your chromedriver path
-
-    options = Options()
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--remote-debugging-port=9222")
-    options.add_argument(f"user-data-dir={profile_path}")
-    options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-
-    service = Service(executable_path=chromedriver_path)
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
 
 global API_Key 
 API_Key = config("YOUTUBE_API_KEY")
 youtube = build("youtube", "v3", developerKey=API_Key)
-driver = initialize_selenium()
 
 def scrape_youtube_content(
     part: str = "snippet",
     queries: List[str] = None,
     type="video",
-    max_results=1,
+    max_results=1, #limit is 80
     order="relevance",
     relevance_language="en",
     video_license=None,
@@ -40,8 +26,6 @@ def scrape_youtube_content(
     if processed_video_ids is None:
         processed_video_ids = set()
     queries_to_retry = []
-    videos_data = {}
-    bad_videos_data = {}
     video_dictionary = {}
     for query in queries:
         try:
@@ -53,7 +37,8 @@ def scrape_youtube_content(
                 maxResults=max_results,
                 order=order,
                 relevanceLanguage=relevance_language,
-                videoLicense=video_license
+                videoLicense=video_license,
+                eventType="completed"
             ).execute()
 
             for item in response.get("items", []):
@@ -63,18 +48,19 @@ def scrape_youtube_content(
                 
                 processed_video_ids.add(video_id)
                 video_link = f"https://www.youtube.com/watch?v={video_id}"
-
+                upload_date = convert_to_giphy_format(item["snippet"].get("publishedAt", None))
                 video_dictionary[video_id] = {
                         "video": 
                         {
-                        "search query" : query,
+                        "content_source" : "youtube",
+                        "search_query" : query,
                         "url": video_link,
-                        "url to view" : None,
+                        "url_to_view" : video_link,
                         "title": item["snippet"].get("title", None),
                         "description": item["snippet"].get("description", None),
                         "tags" : None,
                         "category": None,
-                        "upload_date": item["snippet"].get("publishedAt", None)
+                        "upload_date": upload_date
                         },
 
                         "keywords": 
@@ -106,7 +92,7 @@ def scrape_youtube_content(
     
     return queries_to_retry, video_dictionary, processed_video_ids
 
-def scrape_with_retries(queries, max_retry_attempts=3):
+def scrape_with_retries(queries, max_retry_attempts=3, max_results=1):
     retry_order_sequence = ["relevance", "viewCount", "rating",  "date"]
     processed_video_ids = set()
 
@@ -116,9 +102,9 @@ def scrape_with_retries(queries, max_retry_attempts=3):
         current_order = retry_order_sequence[attempt_number % len(retry_order_sequence)]
         print(f"Attempt {attempt_number + 1}: Using order '{current_order}'")
         
-        queries_to_retry, video_dictionary, processed_video_ids= scrape_youtube_content(
+        queries_to_retry, video_dictionary, processed_video_ids = scrape_youtube_content(
             queries=queries,
-            max_results=1,
+            max_results=max_results,
             order=current_order,
             relevance_language="en",
             video_license=None,
@@ -131,22 +117,9 @@ def scrape_with_retries(queries, max_retry_attempts=3):
 
         queries = queries_to_retry
         attempt_number += 1
-    video_dictionary = get_video_info(processed_video_ids,video_dictionary)
+    video_dictionary = get_video_info(processed_video_ids, video_dictionary)
 
-    good_videos = {}
-    bad_videos = {}
-
-    for video_id, data in video_dictionary.items():
-        url = data["video"]["url"]
-        driver.get(url)
-        user_input = input("Is this video good? (answer: y or n): ").lower()
-        if user_input == "y":
-            good_videos[video_id] = data
-        elif user_input == "n":
-            bad_videos[video_id] = data
-        else:
-            print("please type valid entry")
-    return good_videos, bad_videos, video_dictionary
+    return video_dictionary
 
 def get_video_info(processed_video_ids, video_dictionary):
     video_id_list = ",".join(processed_video_ids)
@@ -177,6 +150,21 @@ import os
 
 CACHE_FILE = "category_cache.json"
 
+def convert_to_giphy_format(date_str):
+    """
+    Converts YouTube's publishedAt date format to Giphy's format.
+    :param date_str: The date string from YouTube (ISO 8601 format).
+    :return: A string in Giphy's date format ('YYYY-MM-DD HH:MM:SS') or None if invalid.
+    """
+    try:
+        # YouTube's ISO 8601 format: '2023-12-13T15:21:00Z'
+        dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
+        # Convert to Giphy's format: 'YYYY-MM-DD HH:MM:SS'
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        print(f"Error converting date: {e}")
+        return None
+    
 def get_youtube_video_category_mapping(api_key):
     # Check if the cache file exists
     if os.path.exists(CACHE_FILE):
@@ -201,10 +189,3 @@ def get_youtube_video_category_mapping(api_key):
         json.dump(category_mapping, f)
 
     return category_mapping
-
-queries = ["video of someone smelling stinky clothes", "stock video of dirty clothes"]
-
-good_videos, bad_videos, video_dictionary = scrape_with_retries(queries=queries)
-
-print("good dictionaries")
-pprint(good_videos)

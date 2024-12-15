@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS video (
     category TEXT,              -- Youtube Category
     search_query TEXT,          -- Query used for search
     upload_date TEXT            -- Upload date of the video (ex: 2018-09-17T12:00:04Z)
-);
+); 
 
 CREATE TABLE IF NOT EXISTS keywords (
     video_id TEXT NOT NULL,     -- Foreign key to reference the video table
