@@ -68,7 +68,7 @@ def scrape_videos (queries, max_results, scraper):
     return video_dictionary
 
 if __name__ == "__main__":
-    queries = ["lions hunting", "zebra"]
+    queries = ["seals eating", "seals swimming"]
     reply = get_content(queries, 1)
 
     print("final content scraping dictionary length is: " + str(len(reply)))
