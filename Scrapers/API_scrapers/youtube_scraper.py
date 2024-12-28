@@ -70,13 +70,7 @@ def scrape_youtube_content(
                             "verbs": None,
                             "nouns": None
                         },
-
-                        "sentiment": 
-                        {
-                            "polarity": None,
-                            "adjectives": None,
-                        },
-
+                        
                         "summary":
                         {
                             "summary": None,

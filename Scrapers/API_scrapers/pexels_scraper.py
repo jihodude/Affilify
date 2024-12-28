@@ -76,12 +76,6 @@ def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="larg
             "nouns": None
         },
 
-        "sentiment": 
-        {
-            "polarity": None,
-            "adjectives": None,
-        },
-
         "summary":
         {
             "summary": None,

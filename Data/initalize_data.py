@@ -28,13 +28,6 @@ CREATE TABLE IF NOT EXISTS keywords (
     FOREIGN KEY (video_id) REFERENCES video(video_id) -- Link to video table
 );
 
-CREATE TABLE IF NOT EXISTS sentiments (
-    video_id TEXT NOT NULL,     -- Foreign key to reference the video table
-    polarity REAL,              -- Sentiment polarity (e.g., -1 to 1)
-    semantic TEXT,              -- Sentiment semantic description (positive, neutral, negative)
-    FOREIGN KEY (video_id) REFERENCES video(video_id) -- Link to video table
-);
-
 CREATE TABLE IF NOT EXISTS summary (
     video_id TEXT NOT NULL,     -- Foreign key to reference the video table
     summary TEXT,               -- Summarized content

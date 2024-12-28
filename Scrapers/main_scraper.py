@@ -3,13 +3,18 @@ from API_scrapers import giphy_scraper, youtube_scraper, pexels_scraper
 import math
 import filter_scrapers
 from pprint import pprint
+import sys
+import os
+# Add the parent directory of Scrapers to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Video.video_downloader import download_videos
 filter_video_boolean = {
     "youtube" : True,
     "pexels" : True,
     "giphy" : True
 }
 
-def get_content(queries, max_results=1, scrapers=["youtube", "pexels", "giphy"], filter_video_boolean = { "youtube" : True, "pexels" : True, "giphy" : True }):
+def get_content(queries, max_results=1, scrapers=["youtube", "pexels", "giphy"], filter_video_boolean = { "youtube" : False, "pexels" : False, "giphy" : False }):
     video_dictionary = {}
 
     for scraper in scrapers:
@@ -68,9 +73,9 @@ def scrape_videos (queries, max_results, scraper):
     return video_dictionary
 
 if __name__ == "__main__":
-    queries = ["seals eating", "seals swimming"]
-    reply = get_content(queries, 1)
-
+    queries = ["frogs short videos", "cute animals short videos"]
+    reply = get_content(queries, max_results=1)
+    download_videos(reply, max_length=6000)
     print("final content scraping dictionary length is: " + str(len(reply)))
     pprint(reply)
 

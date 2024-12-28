@@ -57,12 +57,6 @@ def get_gifs(query, max_results=5, offset=None, rating=None, language="en", end_
                 "nouns": None
             },
 
-            "sentiment": 
-            {
-                "polarity": None,
-                "adjectives": None,
-            },
-
             "summary":
             {
                 "summary": None,
