@@ -14,7 +14,7 @@ search_sticker_end_point = "https://api.giphy.com/v1/stickers/search"
 translate_gif_end_point = "https://api.giphy.com/v1/gifs/translate"
 translate_sticker_end_point = "https://api.giphy.com/v1/stickers/translate"
 
-def get_gifs(query, max_results=5, offset=None, rating=None, language="en", end_point=search_gif_end_point):
+def get_gifs(query, search_keywords, max_results=5, offset=None, rating=None, language="en", end_point=search_gif_end_point):
 
     parameters = {
                 "api_key" : API_Key,
@@ -29,6 +29,16 @@ def get_gifs(query, max_results=5, offset=None, rating=None, language="en", end_
     if response.status_code == 200:
         video_dictionary = {}
         data = response.json()
+
+        rate_limit_remaining = int(response.headers.get("X-RateLimit-Remaining", -1))
+        rate_limit_reset = int(response.headers.get("X-RateLimit-Reset", 0))
+
+        if rate_limit_remaining == 0:
+            reset_time = datetime.datetime.fromtimestamp(rate_limit_reset)
+            current_time = datetime.datetime.now()
+            wait_time = (reset_time - current_time).seconds // 60  # Convert to minutes
+            print(f"Hours quota reached, try again in {wait_time} minutes.")
+            return None
         for item in data.get("data", []):
             video_id = item["id"]
             video_files_url = item["images"]["original"]["mp4"]
@@ -41,6 +51,7 @@ def get_gifs(query, max_results=5, offset=None, rating=None, language="en", end_
             {
             "content_source" : "giphy",
             "search_query" : query,
+            "search_keywords" : ",".join(search_keywords),
             "url": video_files_url,
             "url_to_view" : video_link,
             "title": title, 
@@ -59,9 +70,12 @@ def get_gifs(query, max_results=5, offset=None, rating=None, language="en", end_
 
             "summary":
             {
-                "summary": None,
-                "rating_score": None,
-                "suggested_content_type": None
+                "tags_embeddings" : {},
+                "title_key_words_embeddings" : {},
+                "search_key_words_embeddings" : {},
+                "title_embeddings" : {},
+                "search_query_embeddings" : {},
+                "summary": None
             }
 
         }

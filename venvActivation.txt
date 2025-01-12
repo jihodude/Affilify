@@ -1,2 +1,0 @@
-cd /path/to/Affilify 
-source venv/bin/activate

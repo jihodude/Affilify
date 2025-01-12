@@ -21,7 +21,7 @@ video_endpoint = "https://api.pexels.com/videos/search"
 
 headers = {"Authorization": API_Key}
 
-def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="large", locale=None, per_page=1, page=1):
+def get_videos(query, search_keywords, endpoint=video_endpoint, orientation=None, size="large", locale=None, per_page=1, page=1):
     
     parameters = {"query":query,
                   "orientation":orientation,
@@ -60,6 +60,7 @@ def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="larg
         {
         "content_source" : "pexels",
         "search_query" : query,
+        "search_keywords" : ",".join(search_keywords),
         "url": video_files_url,
         "url_to_view" : video_link,
         "title": title, 
@@ -78,9 +79,12 @@ def get_videos(endpoint=video_endpoint, query=None, orientation=None, size="larg
 
         "summary":
         {
-            "summary": None,
-            "rating_score": None,
-            "suggested_content_type": None
+            "tags_embeddings" : {},
+            "title_key_words_embeddings" : {},
+            "search_key_words_embeddings" : {},
+            "title_embeddings" : {},
+            "search_query_embeddings" : {},
+            "summary": None
         }
 
     }

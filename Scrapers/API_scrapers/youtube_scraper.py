@@ -1,185 +1,327 @@
-from googleapiclient.discovery import build
+###############################################
+# OPTIMIZED & FINAL YOUTUBE SCRAPER SCRIPT
+###############################################
+
+import sys
+import os
+import json
+from datetime import datetime
 from pprint import pprint
-from decouple import config 
+from typing import List
+from decouple import config
+from googleapiclient.discovery import build
+
+# If you truly need Selenium, keep these; otherwise remove.
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-import requests
-from typing import List
-from datetime import datetime
 
+###############################################
+# ADJUST THESE IMPORTS AS NEEDED
+###############################################
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Video.video_downloader import get_video_duration  # <-- Ensure this function works as expected
 
-global API_Key 
+###############################################
+# YOUTUBE SETUP
+###############################################
 API_Key = config("YOUTUBE_API_KEY")
 youtube = build("youtube", "v3", developerKey=API_Key)
 
-def scrape_youtube_content(
-    part: str = "snippet",
-    queries: List[str] = None,
-    type="video",
-    max_results=1, #limit is 80
-    order="relevance",
-    relevance_language="en",
-    video_license=None,
-    processed_video_ids=None
-):
-    if processed_video_ids is None:
-        processed_video_ids = set()
-    queries_to_retry = []
-    video_dictionary = {}
-    for query in queries:
-        try:
-            print(f"Processing query '{query}' with order '{order}'...")
-            response = youtube.search().list(
-                part=part,
-                q=query,
-                type=type,
-                maxResults=max_results,
-                order=order,
-                relevanceLanguage=relevance_language,
-                videoLicense=video_license,
-                eventType="completed"
-            ).execute()
-
-            for item in response.get("items", []):
-                video_id = item["id"]["videoId"]
-                if video_id in processed_video_ids:
-                    continue
-                
-                processed_video_ids.add(video_id)
-                video_link = f"https://www.youtube.com/watch?v={video_id}"
-                upload_date = convert_to_giphy_format(item["snippet"].get("publishedAt", None))
-                video_dictionary[video_id] = {
-                        "video": 
-                        {
-                        "content_source" : "youtube",
-                        "search_query" : query,
-                        "url": video_link,
-                        "url_to_view" : video_link,
-                        "title": item["snippet"].get("title", None),
-                        "description": item["snippet"].get("description", None),
-                        "tags" : None,
-                        "category": None,
-                        "upload_date": upload_date
-                        },
-
-                        "keywords": 
-                        {
-                            "entities": None,
-                            "adjectives": None,
-                            "verbs": None,
-                            "nouns": None
-                        },
-                        
-                        "summary":
-                        {
-                            "summary": None,
-                            "rating_score": None,
-                            "suggested_content_type": None
-                        }
-
-                    }
-  
-        except Exception as e:
-            print(f"An error occurred with query '{query}': {e}")
-            queries_to_retry.append(query)
-    
-    return queries_to_retry, video_dictionary, processed_video_ids
-
-def scrape_with_retries(queries, max_retry_attempts=3, max_results=1):
-    retry_order_sequence = ["relevance", "viewCount", "rating",  "date"]
-    processed_video_ids = set()
-
-    attempt_number = 0
-
-    while attempt_number < max_retry_attempts:
-        current_order = retry_order_sequence[attempt_number % len(retry_order_sequence)]
-        print(f"Attempt {attempt_number + 1}: Using order '{current_order}'")
-        
-        queries_to_retry, video_dictionary, processed_video_ids = scrape_youtube_content(
-            queries=queries,
-            max_results=max_results,
-            order=current_order,
-            relevance_language="en",
-            video_license=None,
-            processed_video_ids=processed_video_ids
-        )
-
-        if not queries_to_retry:
-            print("All queries processed successfully.")
-            break
-
-        queries = queries_to_retry
-        attempt_number += 1
-    video_dictionary = get_video_info(processed_video_ids, video_dictionary)
-
-    return video_dictionary
-
-def get_video_info(processed_video_ids, video_dictionary):
-    video_id_list = ",".join(processed_video_ids)
-
-    try:
-        response = youtube.videos().list(part="snippet", id=video_id_list).execute()
-    except Exception as e:
-        print(f"Error fetching video info: {e}")
-    try:
-        for item in response["items"]:
-            video_id = item["id"]
-            snippet = item["snippet"]
-            tags = snippet.get("tags", [])
-            
-            # Get categoryId and map to category name
-            category_id = snippet.get("categoryId", "Unknown")
-            category_mapping = get_youtube_video_category_mapping(API_Key)
-            category_name = category_mapping.get(category_id, "Unknown")
-            
-            video_dictionary[video_id]["video"]["tags"] = ",".join(tags)
-            video_dictionary[video_id]["video"]["category"] = category_name
-    except Exception as e:
-        print(f"Error{e}")
-    return video_dictionary
-
-import json
-import os
-
+###############################################
+# GLOBALS
+###############################################
 CACHE_FILE = "category_cache.json"
 
-def convert_to_giphy_format(date_str):
+
+def convert_to_giphy_format(date_str: str) -> str:
     """
-    Converts YouTube's publishedAt date format to Giphy's format.
-    :param date_str: The date string from YouTube (ISO 8601 format).
-    :return: A string in Giphy's date format ('YYYY-MM-DD HH:MM:SS') or None if invalid.
+    Converts YouTube's publishedAt date format (ISO 8601) to a standard
+    YYYY-MM-DD HH:MM:SS format.
+    Example input: '2023-12-13T15:21:00Z'
     """
     try:
-        # YouTube's ISO 8601 format: '2023-12-13T15:21:00Z'
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
-        # Convert to Giphy's format: 'YYYY-MM-DD HH:MM:SS'
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e:
         print(f"Error converting date: {e}")
         return None
-    
-def get_youtube_video_category_mapping(api_key):
-    # Check if the cache file exists
+
+
+def get_youtube_video_category_mapping(api_key: str) -> dict:
+    """
+    Fetch or load cached YouTube category mappings (category_id -> category_name).
+    """
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as f:
             return json.load(f)
 
-
     category_mapping = {}
-
     try:
-        response = youtube.videoCategories().list(part="snippet", regionCode="US").execute()
+        response = youtube.videoCategories().list(
+            part="snippet",
+            regionCode="US"  # Adjust region if desired
+        ).execute()
+
         for item in response["items"]:
             category_id = item["id"]
             category_name = item["snippet"]["title"]
             category_mapping[category_id] = category_name
+
     except Exception as e:
         print(f"Error fetching category mapping: {e}")
         return {}
 
-    # Save to cache file
+    # Cache the mapping for future runs
     with open(CACHE_FILE, "w") as f:
         json.dump(category_mapping, f)
 
     return category_mapping
+
+
+def get_video_info(processed_video_ids: set, video_dictionary: dict) -> dict:
+    """
+    Enrich 'video_dictionary' with tags/category by calling youtube.videos().list().
+    Only requests IDs that actually exist in 'video_dictionary'.
+    """
+    valid_ids = [vid for vid in processed_video_ids if vid in video_dictionary]
+    if not valid_ids:
+        return video_dictionary  # No new info to fetch
+
+    video_id_list = ",".join(valid_ids)
+    try:
+        response = youtube.videos().list(
+            part="snippet",
+            id=video_id_list
+        ).execute()
+    except Exception as e:
+        print(f"Error fetching video info: {e}")
+        return video_dictionary
+
+    try:
+        category_mapping = get_youtube_video_category_mapping(API_Key)
+        for item in response["items"]:
+            video_id = item["id"]
+            snippet = item["snippet"]
+            tags = snippet.get("tags", [])
+            category_id = snippet.get("categoryId", "Unknown")
+            category_name = category_mapping.get(category_id, "Unknown")
+
+            video_dictionary[video_id]["video"]["tags"] = ",".join(tags)
+            video_dictionary[video_id]["video"]["category"] = category_name
+
+    except Exception as e:
+        print(f"Error processing video info: {e}")
+
+    return video_dictionary
+
+
+def scrape_youtube_content(
+    max_length: int,
+    queries: List[str],
+    search_keywords: List[str],
+    max_results: int = 1,      # number of valid videos to gather per query
+    initial_max_results: int = 2,  # how many to fetch initially in each pass
+    order: str = "relevance",
+    relevance_language: str = None,
+    video_license: str = None,
+    processed_video_ids: set = None,
+    part: str = "snippet",
+    safe_search: str = "moderate",  # moderate or strict to filter out explicit
+    region_code: str = "US"
+) -> tuple:
+    """
+    For each query, tries to gather up to 'max_results' valid videos:
+      - Increments maxResults as needed (up to 50).
+      - Skips duplicates and too-long videos.
+      - Uses 'safeSearch' and 'regionCode' to refine results.
+      - Returns:
+         (queries_to_retry, newly_found_videos, updated_processed_ids)
+    """
+
+    if processed_video_ids is None:
+        processed_video_ids = set()
+
+    queries_to_retry = []
+    video_dictionary = {}
+
+    # Decide if we can set videoDuration=short to skip long videos from the start
+    # if user wants only videos under 4min
+    if max_length < 240:
+        video_duration_filter = "short"
+    else:
+        video_duration_filter = "any"  # could be 'medium' or 'long' if desired
+
+    for query in queries:
+        print(f"\nProcessing query '{query}' with order '{order}'...")
+
+        valid_video_count = 0
+        local_max_results = initial_max_results
+        # Keep fetching until we have enough or we exceed 50
+        while valid_video_count < max_results and local_max_results <= 50:
+            needed = max_results - valid_video_count
+            fetch_size = min(local_max_results, needed)
+            print(f" -> Attempting to fetch {fetch_size} results for '{query}' "
+                  f"(already found {valid_video_count})")
+
+            try:
+                response = youtube.search().list(
+                    part=part,
+                    q=query,
+                    type="video",
+                    maxResults=fetch_size,
+                    order=order,
+                    videoLicense=video_license,
+                    relevanceLanguage=relevance_language,
+                    eventType="completed",
+                    safeSearch=safe_search,
+                    regionCode=region_code,
+                    # 'videoDuration' helps skip obviously too-long videos
+                    videoDuration=video_duration_filter
+                ).execute()
+
+            except Exception as e:
+                # If there's a quota error or something else, stop here
+                print(f"An error occurred with query '{query}': {e}")
+                break
+
+            items = response.get("items", [])
+            if not items:
+                print(f" -> No results returned for '{query}'. Breaking.")
+                break
+
+            for item in items:
+                if valid_video_count >= max_results:
+                    break
+
+                video_id = item["id"]["videoId"]
+
+                # Check duplicates
+                if video_id in processed_video_ids:
+                    continue
+
+                video_link = f"https://www.youtube.com/watch?v={video_id}"
+                duration = get_video_duration(video_url=video_link)
+
+                # Double-check length (some short videos can be 4:01, for example)
+                if duration > max_length:
+                    print(f" -> Skipping too-long video {video_link}, {duration}s.")
+                    continue
+
+                # We got a valid video
+                processed_video_ids.add(video_id)
+                valid_video_count += 1
+
+                snippet = item["snippet"]
+                upload_date = convert_to_giphy_format(snippet.get("publishedAt", None))
+                title = snippet.get("title", "")
+                description = snippet.get("description", "")
+
+                video_dictionary[video_id] = {
+                    "video": {
+                        "content_source": "youtube",
+                        "search_query": query,
+                        "search_keywords" : ",".join(search_keywords),
+                        "url": video_link,
+                        "url_to_view": video_link,
+                        "title": title,
+                        "description": description,
+                        "tags": None,
+                        "category": None,
+                        "upload_date": upload_date
+                    },
+                    "keywords": {
+                        "entities": None,
+                        "adjectives": None,
+                        "verbs": None,
+                        "nouns": None
+                    },
+                    "summary": {
+                        "tags_embeddings" : {},
+                        "title_key_words_embeddings" : {},
+                        "search_key_words_embeddings" : {},
+                        "title_embeddings" : {},
+                        "search_query_embeddings" : {},
+                        "summary": None
+                    }
+                }
+
+            # Increase for next pass if needed
+            local_max_results += 5
+
+        if valid_video_count < max_results:
+            print(f" -> Found {valid_video_count}/{max_results} for '{query}'. Will retry.")
+            queries_to_retry.append(query)
+        else:
+            print(f" -> Successfully found {valid_video_count}/{max_results} for '{query}'.")
+
+    return queries_to_retry, video_dictionary, processed_video_ids
+
+
+def scrape_with_retries(
+    queries: List[str],
+    search_keywords: List[str],
+    max_length: int,
+    max_results: int = 5,
+    max_retry_attempts: int = 4
+) -> dict:
+    """
+    Repeatedly attempt scraping with different 'order' until either:
+     - All queries have reached 'max_results', or
+     - We exhaust 'max_retry_attempts'.
+    Finally, enrich results with 'get_video_info'.
+    """
+
+    retry_order_sequence = ["relevance", "viewCount", "rating", "date"]
+    processed_video_ids = set()
+    global_video_dictionary = {}
+
+    attempt_number = 0
+    # Keep trying until we run out of attempts OR have no queries left to retry
+    while attempt_number < max_retry_attempts and queries:
+        current_order = retry_order_sequence[attempt_number % len(retry_order_sequence)]
+        print(f"\n==========================")
+        print(f" Attempt {attempt_number + 1} of {max_retry_attempts} (order='{current_order}')")
+        print(f"==========================")
+
+        queries_to_retry, partial_dict, processed_video_ids = scrape_youtube_content(
+            max_length=max_length,
+            queries=queries,
+            max_results=max_results,
+            initial_max_results=2,
+            order=current_order,
+            processed_video_ids=processed_video_ids
+        )
+
+        # Merge newly found videos
+        for vid_id, data in partial_dict.items():
+            global_video_dictionary[vid_id] = data
+
+        if not queries_to_retry:
+            print("\nAll queries reached their max_results requirement!")
+            break
+
+        queries = queries_to_retry
+        attempt_number += 1
+
+    # Enrich final dictionary with tags & category
+    global_video_dictionary = get_video_info(processed_video_ids, global_video_dictionary)
+    return global_video_dictionary
+
+
+###############################################
+# EXAMPLE USAGE (Uncomment to Run Directly)
+###############################################
+"""
+if __name__ == "__main__":
+    test_queries = ["funny cat videos", "cute kittens playing"]
+    # e.g., want up to 3 valid videos per query, each under 300s in length
+    final_videos = scrape_with_retries(
+        queries=test_queries,
+        max_length=300,    # skip videos longer than 300s (5 minutes)
+        max_results=3,     # want up to 3 valid videos per query
+        max_retry_attempts=4
+    )
+    print("\nFinal video dictionary length:", len(final_videos))
+    pprint(final_videos)
+"""

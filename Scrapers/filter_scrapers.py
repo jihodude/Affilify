@@ -1,4 +1,7 @@
-from API_scrapers import giphy_scraper, youtube_scraper, pexels_scraper
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Scrapers.API_scrapers import giphy_scraper, youtube_scraper, pexels_scraper
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -8,6 +11,7 @@ import random
 import time
 from pprint import pprint
 import undetected_chromedriver as uc
+import spacy
 
 def initialize_selenium():
     options = uc.ChromeOptions()
@@ -27,61 +31,77 @@ def initialize_selenium():
 import threading
 import time
 
-import threading
-import time
-
-def filter_videos(video_dictionary):
-    driver = initialize_selenium()
+nlp = spacy.load("en_core_web_sm")
+def filter_videos(video_dictionaries, scraper):
     try:
-        manually_filtered_good_videos = {}
-        manually_filtered_bad_videos = {}
+        for video_dictionary in video_dictionaries:
+            #load video dictionary information
+            video_section_dict = video_dictionary.get("video")
 
-        for video_id, data in video_dictionary.items():
-            if not data:  # Skip invalid or None entries
-                continue
-            
-            url = data["video"]["url_to_view"]
-            print(f"Loading video: {url}")
+            search_query = video_section_dict["search_query"]
+            search_keywords = video_section_dict["search_keywords"]
+            title = video_section_dict["title"]
+            description = video_section_dict["description"]
+            tags = video_section_dict["tags"]
+            category = video_section_dict["category"]
+            url = video_section_dict["url"]
 
-            # Declare user_input variable in the outer scope
-            user_input = ""
-            # Flag to detect when user has answered
-            user_answered = threading.Event()
+            #these will be empty if they are scraped, and they will be data if it's from the db. 
+            summary_section_dict = video_dictionary.get("summary")
+            #word embeddings data from db
+            tags_embeddings_dict = summary_section_dict["tags_embeddings"]#
+            title_key_words_embeddings_dict = summary_section_dict["title_key_words_embeddings"]
+            search_key_words_embeddings_dict = summary_section_dict["search_key_words_embeddings"]
+            #sentence embeddings data from db
+            title_embeddings = summary_section_dict["title_embeddings"]
+            search_query_embeddings = summary_section_dict["search_query_embeddings"]
 
-            # Function to handle user input
-            def get_user_input():
-                nonlocal user_input  # Use the variable from the outer scope
-                while not user_answered.is_set():  # Keep prompting until user answers
-                    user_input = input("Is this video good? (answer: y or n): ").lower()
-                    if user_input in ["y", "n"]:
-                        user_answered.set()  # Signal that the user has answered
-                    else:
-                        print("Invalid input. Please type 'y' for yes or 'n' for no.")
+            #recheck logic!! my brain is fried after 7 hours of this.
+            if not scraper == "db":
+                if title_key_words_embeddings_dict == {}:
+                    title_key_words = extract_keywords(title)
+                    #generate embeddings wiht: tags
+                    #summary_section_dict["title_key_words_embeddings"], title_key_words_embeddings_dict = generate_embeddings_dict(tags)
+                if search_key_words_embeddings_dict == {}:
+                    pass
+                if title_embeddings == {}:
+                    pass
+                if search_query_embeddings == {}:
+                    pass
 
-            # Start user input thread
-            input_thread = threading.Thread(target=get_user_input)
-            input_thread.start()
+            if not tags == '': #if tags exsits
+                if tags_embeddings_dict == {}:
+                    pass
+            elif tags == '':
+                title_key_words = extract_keywords(title) #this isnt neccarry but i cant fully logic comfirm that, but the idea is that title_key_words will be made in the case tag is empty, because
+                #because that means it's from the scraper, and it would have a emptpy title_key_words_embeddings_dictionary. But think about if again and make sure.
+                tags = title_key_words
+                video_section_dict["tags"] = tags
+                if tags_embeddings_dict == {}:
+                    pass
+                pass
+                # summary_section_dict["tags_embeddings"] = generate_embeddings_dict(tags)
 
-            # Load the URL
-            try:
-                driver.set_page_load_timeout(10)  # Optional timeout for the page load
-                driver.get(url)  # Load the video URL
-            except Exception as e:
-                print(f"Page load issue: {e}. Moving on.")
 
-            # Wait for the user input thread to finish
-            while not user_answered.is_set():
-                time.sleep(1)  # Wait for the user to answer
+    except Exception as e: 
+        pass
 
-            # Process the user input
-            if user_input == "y":
-                manually_filtered_good_videos[video_id] = data
-            elif user_input == "n":
-                manually_filtered_bad_videos[video_id] = data
+def extract_keywords(text):
+    doc = nlp(text)
+    nouns = []
+    verbs = []
+    adjectives = []
+    entities = []
+    for token in doc:
+        if not token.is_stop:
+            if token.pos_ == "NOUN":
+                nouns.append(token.text)
+            elif token.pos_ == "VERB":
+                verbs.append(token.text)
+            elif token.pos_ == "ADJ":
+                adjectives.append(token.text)
+    for ent in doc.ents:
+        entities.append(ent.text)
 
-            # Ensure the input thread is closed before moving to the next video
-            input_thread.join()
+    
 
-    finally:
-        driver.quit()
-    return manually_filtered_good_videos, manually_filtered_bad_videos
