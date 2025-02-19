@@ -79,6 +79,7 @@ def get_videos(query, search_keywords, endpoint=video_endpoint, orientation=None
 
         "summary":
         {
+            "inital_search_query" : query,
             "tags_embeddings" : {},
             "title_key_words_embeddings" : {},
             "search_key_words_embeddings" : {},

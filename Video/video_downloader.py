@@ -141,4 +141,4 @@ if __name__ == "__main__":
             }
         },
     }
-    download_videos(scraped_data, max_length=60)
+    download_video(video_url="", output_file="/Users/jihobae/Downloads/Tiktok Vlogs Day 1-70 of Junior Year")

@@ -69,7 +69,7 @@ def get_gifs(query, search_keywords, max_results=5, offset=None, rating=None, la
             },
 
             "summary":
-            {
+            {   "inital_search_query" : query,
                 "tags_embeddings" : {},
                 "title_key_words_embeddings" : {},
                 "search_key_words_embeddings" : {},

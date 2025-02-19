@@ -10,7 +10,7 @@ from pprint import pprint
 from typing import List
 from decouple import config
 from googleapiclient.discovery import build
-
+import math
 # If you truly need Selenium, keep these; otherwise remove.
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -116,27 +116,161 @@ def get_video_info(processed_video_ids: set, video_dictionary: dict) -> dict:
     return video_dictionary
 
 
+# def scrape_youtube_content(
+#     max_length: int,
+#     queries: List[str],
+#     search_keywords: List[str],
+#     max_results: int = 1,      # number of valid videos to gather per query
+#     order: str = "relevance",
+#     relevance_language: str = None,
+#     video_license: str = None,
+#     processed_video_ids: set = None,
+#     part: str = "snippet",
+#     safe_search: str = "moderate",  # moderate or strict to filter out explicit
+#     region_code: str = "US"
+# ) -> tuple:
+#     """
+#     For each query, tries to gather up to 'max_results' valid videos:
+#       - Increments maxResults as needed (up to 50).
+#       - Skips duplicates and too-long videos.
+#       - Uses 'safeSearch' and 'regionCode' to refine results.
+#       - Returns:
+#          (queries_to_retry, newly_found_videos, updated_processed_ids)
+#     """
+
+#     if processed_video_ids is None:
+#         processed_video_ids = set()
+
+#     queries_to_retry = []
+#     video_dictionary = {}
+
+#     # Decide if we can set videoDuration=short to skip long videos from the start
+#     # if user wants only videos under 4min
+#     if max_length < 240:
+#         video_duration_filter = "short"
+#     else:
+#         video_duration_filter = "any"  # could be 'medium' or 'long' if desired
+
+#     for query in queries:
+#         print(f"\nProcessing query '{query}' with order '{order}'...") 
+
+#         valid_video_count = 0
+#         # Keep fetching until we have enough or we exceed 50
+#         while valid_video_count < max_results:
+#             needed = math.ceil((max_results - valid_video_count))
+#             print(f" -> Attempting to fetch {max_results-valid_video_count} results for '{query}' "
+#                   f"(already found {valid_video_count})")
+
+#             try:
+#                 response = youtube.search().list(
+#                     part=part,
+#                     q=query,
+#                     type="video",
+#                     maxResults=needed,
+#                     order=order,
+#                     videoLicense=video_license,
+#                     relevanceLanguage=relevance_language,
+#                     eventType="completed",
+#                     safeSearch=safe_search,
+#                     regionCode=region_code,
+#                     # 'videoDuration' helps skip obviously too-long videos
+#                     videoDuration=video_duration_filter
+#                 ).execute()
+
+#             except Exception as e:
+#                 # If there's a quota error or something else, stop here
+#                 print(f"An error occurred with query '{query}': {e}")
+#                 break
+
+#             items = response.get("items", [])
+#             if not items:
+#                 print(f" -> No results returned for '{query}'. Breaking.")
+#                 break
+
+#             for item in items:
+#                 if valid_video_count >= max_results:
+#                     break
+
+#                 video_id = item["id"]["videoId"]
+
+#                 # Check duplicates
+#                 if video_id in processed_video_ids:
+#                     continue
+
+#                 video_link = f"https://www.youtube.com/watch?v={video_id}"
+#                 duration = get_video_duration(video_url=video_link)
+
+#                 # Double-check length (some short videos can be 4:01, for example)
+#                 if duration > max_length:
+#                     print(f" -> Skipping too-long video {video_link}, {duration}s.")
+#                     continue
+
+#                 # We got a valid video
+#                 processed_video_ids.add(video_id)
+#                 valid_video_count += 1
+
+#                 snippet = item["snippet"]
+#                 upload_date = convert_to_giphy_format(snippet.get("publishedAt", None))
+#                 title = snippet.get("title", "")
+#                 description = snippet.get("description", "")
+
+#                 video_dictionary[video_id] = {
+#                     "video": {
+#                         "content_source": "youtube",
+#                         "search_query": query,
+#                         "search_keywords" : ",".join(search_keywords),
+#                         "url": video_link,
+#                         "url_to_view": video_link,
+#                         "title": title,
+#                         "description": description,
+#                         "tags": None,
+#                         "category": None,
+#                         "upload_date": upload_date
+#                     },
+#                     "keywords": {
+#                         "entities": None,
+#                         "adjectives": None,
+#                         "verbs": None,
+#                         "nouns": None
+#                     },
+#                     "summary": {
+#                         "inital_search_query" : query,
+#                         "tags_embeddings" : {},
+#                         "title_key_words_embeddings" : {},
+#                         "search_key_words_embeddings" : {},
+#                         "title_embeddings" : {},
+#                         "search_query_embeddings" : {},
+#                         "summary": None
+#                     }
+#                 }
+
+#         if valid_video_count < max_results:
+#             print(f" -> Found {valid_video_count}/{max_results} for '{query}'. Will retry.")
+#             queries_to_retry.append(query)
+#         else:
+#             print(f" -> Successfully found {valid_video_count}/{max_results} for '{query}'.")
+
+#     return queries_to_retry, video_dictionary, processed_video_ids
+import math
+
 def scrape_youtube_content(
     max_length: int,
     queries: List[str],
     search_keywords: List[str],
     max_results: int = 1,      # number of valid videos to gather per query
-    initial_max_results: int = 2,  # how many to fetch initially in each pass
     order: str = "relevance",
     relevance_language: str = None,
     video_license: str = None,
     processed_video_ids: set = None,
     part: str = "snippet",
-    safe_search: str = "moderate",  # moderate or strict to filter out explicit
+    safe_search: str = "moderate",  # 'none', 'moderate', or 'strict'
     region_code: str = "US"
 ) -> tuple:
     """
-    For each query, tries to gather up to 'max_results' valid videos:
-      - Increments maxResults as needed (up to 50).
+    For each query, tries to gather up to 'max_results' valid videos.
+      - Uses pageToken for proper pagination to avoid repeating the same results.
       - Skips duplicates and too-long videos.
-      - Uses 'safeSearch' and 'regionCode' to refine results.
-      - Returns:
-         (queries_to_retry, newly_found_videos, updated_processed_ids)
+      - Returns: (queries_to_retry, newly_found_videos, updated_processed_ids)
     """
 
     if processed_video_ids is None:
@@ -145,75 +279,78 @@ def scrape_youtube_content(
     queries_to_retry = []
     video_dictionary = {}
 
-    # Decide if we can set videoDuration=short to skip long videos from the start
-    # if user wants only videos under 4min
-    if max_length < 240:
-        video_duration_filter = "short"
-    else:
-        video_duration_filter = "any"  # could be 'medium' or 'long' if desired
+    # Decide if we can set videoDuration=short to skip obviously long videos
+    video_duration_filter = "short" if max_length < 240 else "any"
 
     for query in queries:
         print(f"\nProcessing query '{query}' with order '{order}'...")
 
         valid_video_count = 0
-        local_max_results = initial_max_results
-        # Keep fetching until we have enough or we exceed 50
-        while valid_video_count < max_results and local_max_results <= 50:
+        next_page_token = None
+
+        # Keep fetching until we have enough or exhaust pages
+        while valid_video_count < max_results:
             needed = max_results - valid_video_count
-            fetch_size = min(local_max_results, needed)
-            print(f" -> Attempting to fetch {fetch_size} results for '{query}' "
-                  f"(already found {valid_video_count})")
+            # The API can only return up to 50 items per call
+            batch_size = min(needed, 50)
+
+            print(
+                f" -> Attempting to fetch {needed} results for '{query}' "
+                f"(already found {valid_video_count}); using batch_size={batch_size}"
+            )
 
             try:
                 response = youtube.search().list(
                     part=part,
                     q=query,
                     type="video",
-                    maxResults=fetch_size,
+                    maxResults=batch_size,
+                    pageToken=next_page_token,       # <--- IMPORTANT for pagination
                     order=order,
                     videoLicense=video_license,
                     relevanceLanguage=relevance_language,
                     eventType="completed",
                     safeSearch=safe_search,
                     regionCode=region_code,
-                    # 'videoDuration' helps skip obviously too-long videos
                     videoDuration=video_duration_filter
                 ).execute()
 
             except Exception as e:
-                # If there's a quota error or something else, stop here
                 print(f"An error occurred with query '{query}': {e}")
                 break
 
             items = response.get("items", [])
+            next_page_token = response.get("nextPageToken", None)
+
             if not items:
                 print(f" -> No results returned for '{query}'. Breaking.")
                 break
 
+            # Process each item
             for item in items:
                 if valid_video_count >= max_results:
                     break
 
                 video_id = item["id"]["videoId"]
 
-                # Check duplicates
+                # Skip if we already processed this video
                 if video_id in processed_video_ids:
                     continue
 
                 video_link = f"https://www.youtube.com/watch?v={video_id}"
-                duration = get_video_duration(video_url=video_link)
-
-                # Double-check length (some short videos can be 4:01, for example)
+                duration = get_video_duration(video_link)
                 if duration > max_length:
                     print(f" -> Skipping too-long video {video_link}, {duration}s.")
                     continue
 
-                # We got a valid video
+                # Accept this valid video
                 processed_video_ids.add(video_id)
                 valid_video_count += 1
 
                 snippet = item["snippet"]
-                upload_date = convert_to_giphy_format(snippet.get("publishedAt", None))
+                upload_date = convert_to_giphy_format(
+                    snippet.get("publishedAt", None)
+                )
                 title = snippet.get("title", "")
                 description = snippet.get("description", "")
 
@@ -221,7 +358,7 @@ def scrape_youtube_content(
                     "video": {
                         "content_source": "youtube",
                         "search_query": query,
-                        "search_keywords" : ",".join(search_keywords),
+                        "search_keywords": ",".join(search_keywords),
                         "url": video_link,
                         "url_to_view": video_link,
                         "title": title,
@@ -237,25 +374,28 @@ def scrape_youtube_content(
                         "nouns": None
                     },
                     "summary": {
-                        "tags_embeddings" : {},
-                        "title_key_words_embeddings" : {},
-                        "search_key_words_embeddings" : {},
-                        "title_embeddings" : {},
-                        "search_query_embeddings" : {},
+                        "inital_search_query": query,
+                        "tags_embeddings": {},
+                        "title_key_words_embeddings": {},
+                        "search_key_words_embeddings": {},
+                        "title_embeddings": {},
+                        "search_query_embeddings": {},
                         "summary": None
                     }
                 }
 
-            # Increase for next pass if needed
-            local_max_results += 5
+            # If YouTube gave no more pages to fetch, stop
+            if not next_page_token:
+                break
 
+        # After we tried all pages or got enough videos
         if valid_video_count < max_results:
             print(f" -> Found {valid_video_count}/{max_results} for '{query}'. Will retry.")
             queries_to_retry.append(query)
         else:
             print(f" -> Successfully found {valid_video_count}/{max_results} for '{query}'.")
 
-    return queries_to_retry, video_dictionary, processed_video_ids
+    return (queries_to_retry, video_dictionary, processed_video_ids)
 
 
 def scrape_with_retries(
@@ -287,8 +427,8 @@ def scrape_with_retries(
         queries_to_retry, partial_dict, processed_video_ids = scrape_youtube_content(
             max_length=max_length,
             queries=queries,
+            search_keywords=search_keywords,
             max_results=max_results,
-            initial_max_results=2,
             order=current_order,
             processed_video_ids=processed_video_ids
         )

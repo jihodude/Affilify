@@ -23,16 +23,16 @@ def get_content(queries, search_keywords, max_results, max_length=500, scrapers=
         if filter_video_boolean[scraper]:
             result_count = 0
             current_max_results = max_results # Use a separate variable to control results per iteration
-            iteration_limit = 10  # Prevent infinite loops
+            iteration_limit = 5  # Prevent infinite loops
             iteration_count = 0  # Track iterations
             filtered_dictionaries = {}
             
             while result_count < max_results and iteration_count < iteration_limit:
-                reply_dictionaries = scrape_videos(queries=queries, max_length=max_length, max_results=current_max_results, scraper=scraper)
+                print("result count " + str(result_count))
+                reply_dictionaries = scrape_videos(queries=queries, search_keywords=search_keywords, max_length=max_length, max_results=current_max_results, scraper=scraper)
                 
                 for key in list(filtered_dictionaries):
                     reply_dictionaries.pop(key, None)
-
                 filtered_good_videos_reply, filtered_bad_videos_reply = filter_videos(reply_dictionaries, scraper)
                 filtered_dictionaries.update({**filtered_good_videos_reply, **filtered_bad_videos_reply})
 
@@ -45,7 +45,7 @@ def get_content(queries, search_keywords, max_results, max_length=500, scrapers=
                         result_count = len(video_dictionary)
 
                 print(f"Scraper '{scraper}': Found {result_count}/{max_results} videos (Iteration {iteration_count}/{iteration_limit})")
-
+                
                 iteration_count += 1
                 current_max_results *= 2
             print(f"Scraper '{scraper}': found all {result_count}/{max_results} videos")
@@ -100,14 +100,15 @@ def scrape_videos (queries, search_keywords, max_length, max_results, scraper):
     return video_dictionary
 
 if __name__ == "__main__":
-    subqueries, sub_kws = generate_sub_queries_and_kws(
-        subquery_count=5, 
+    video_dictionary = {}
+    subqueries, sub_kws= generate_sub_queries_and_kws(
+        subquery_count=1, 
         subkeyword_count=1, 
-        main_query="cute baby koala videos", 
-        main_keywords="cute, adorable, animals"
+        main_query="cute cat videos", 
+        main_keywords="cute, adorable, animals, funny, cat, kitten"
     )
-    reply = get_content(subqueries, max_results=2)
-    download_videos(reply, max_length=300)
-    print("final content scraping dictionary length is: " + str(len(reply)))
-    pprint(reply)
+    print(f"subqueries: {subqueries}, sub_kws: {sub_kws}")
 
+
+    video_dictionary = get_content(queries=subqueries, search_keywords=sub_kws, max_results=1, scrapers=["pexels"], filter_video_boolean={"pexels":False})
+    pprint(video_dictionary)

@@ -15,9 +15,11 @@ def generate_sub_queries_and_kws(subquery_count, subkeyword_count, main_query, m
     Instructions:
     Your task is to generate exactly {subquery_count} {subquery_word} and exactly {subkeyword_count} {subkeyword_word}, no more and no fewer.
 
-    Understand the required video clips by analyzing the main query and main keywords. Ensure the {subkeyword_word} reflect the specific context of the main query 
-    (e.g., if the main query is about "baby koalas fighting," the keywords should include "baby koala," "koala fights," etc., not just generic terms like "baby" or "fights"). 
-
+    Analize the context of the content creation and generate the optimal query for the said video. These subqueries and keywords will be used to find stock footages to be voiced over by a seperate script. 
+    Ensure the {subquery_word} reflect the specific context of the main query. ONLY USE NOUNS, VERBS, ADJECTIVES
+    (e.g., if the main query is about "baby koalas fighting," the {subquery_word} should be something simple and generic like "baby koala," "cute koala," etc., not complicated terms like "videos of baby koalas fighting in the wild" or "koala fights caught on camera". 
+    (Essentially, keep subqueries short, simple, and not too specific. This way the search enginer of stock footage sites such as pexels, giphy and pixabay and easily find related content.).  
+    (e.g., if the main query is about "college acceptance" think about what kind of clips should play behind a video about college admissions => college campus, college students, college drone shots, etc. Apply this logic when it makes sense.)
     For Giphy and Pexels, {subkeyword_word} (simple, core terms) are preferred to improve search accuracy. For YouTube, detailed {subquery_word} are preferred.
 
     Strictly follow this format:
