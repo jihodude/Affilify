@@ -18,7 +18,7 @@ def generate_script(video_templet, impersonation, main_query, main_keywords, vid
     """
     Generates exactly 'video_count' scripts for a given video_templet,
     referencing main_query, using main_keywords for context.
-    The scripts are short, casual, and avoid em-dashes (--) or semicolons (;) or emojis.
+    The scripts are short, casual, and avoid em-dashes (--) or semicolons (;) or emojis or quotations marks ("" or '') and comas (,).
 
     """
     
@@ -36,7 +36,8 @@ def generate_script(video_templet, impersonation, main_query, main_keywords, vid
     7. Return Exactly{video_count} scripts, labeled as video1:, video2:, etc.
     8. Do not exceed {video_count} scripts. No more, no less.
     9. Avoid filler or stating the obvious. Use a friendly, viral short-video style.
-    10. Do not use the punctuation: "--" or ";".
+    10. Do not use the punctuation: em-dashes (--) or semicolons (;) or emojis or quotations marks ("" or '') and comas (,).
+    11. scripts should be final to use, so avoid dynamic fillers that require second touch such as [your name] or something like that. No Placeholders.
     """
 
     user_message = f"""
@@ -60,7 +61,7 @@ def generate_script(video_templet, impersonation, main_query, main_keywords, vid
             {"role": "developer", "content": dev_message},
             {"role": "user", "content": user_message}
         ],
-        temperature=1,
+        temperature=0.6,
         n=1
     )
     extract_video_scripts(response.choices[0].message.content)

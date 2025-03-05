@@ -1,4 +1,4 @@
-from moviepy import VideoFileClip, concatenate_videoclips, vfx, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy import VideoFileClip, concatenate_videoclips, vfx, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip
 from moviepy.video.tools.subtitles import SubtitlesClip
 import os
 from moviepy.video.fx.Crop import Crop
@@ -14,29 +14,33 @@ def load_video_clips(content_folder, clip_length, video_length):
     clips = []  # List to store video clips
     clips_sum = 0  # Total duration of clips added so far
     file_paths = []
+
+    # Gather all video file paths
     for root, _, files in os.walk(content_folder):
         for file in files:
             file_paths.append(os.path.join(root, file))
-    # Iterate through video paths
-    for video_path in file_paths:
-        myclip = VideoFileClip(video_path)
 
-        # Determine the duration of the clip to add
-        if "giphy" in video_path:  # Handle GIFs differently if needed
+    if not file_paths:  # Ensure there are videos to process
+        raise ValueError("No video files found in the specified folder.")
+
+    # Keep looping through videos until the total length is met
+    while clips_sum < video_length:
+        random.shuffle(file_paths)  # Shuffle to add variety if looping multiple times
+        for video_path in file_paths:
+            myclip = VideoFileClip(video_path)
+
+            # Determine the duration of the clip to add
             duration = min(myclip.duration, clip_length)
-        else:
-            duration = min(myclip.duration, clip_length)  # Use the shorter of the two
 
-        # Add the subclip to the list
-        clips.append(myclip.subclipped(0, duration))
-        
-        clips_sum += duration
+            # Add the subclip to the list
+            clips.append(myclip.subclipped(0, duration))
+            clips_sum += duration
 
-        # Stop if the total duration meets or exceeds the desired video length
-        if clips_sum >= video_length:
-            break
-         
-    return clips
+            # Stop if the total duration meets or exceeds the desired video length
+            if clips_sum >= video_length:
+                break
+
+    return clips  # Ensure the function returns only after filling the required duration
 
 def crop_videos(clips, aspect_ratio=(9, 16)):
     cropped_clips = []
@@ -94,7 +98,7 @@ def export(video, output_path):
 
 def informative_video(video_number=1, width=1080, height=1920, aspect_ratio=(9, 16), 
                       output_folder=OUTPUT_DIR, content_folder=VIDEO_DIR, 
-                      video_length=60, clip_length=3, audio_path=None, main_query=None):
+                      video_length=60, clip_length=3, audio_path=None, bgm_path=None, bgm_volume = 0.5, main_query=None):
 
     output_path = os.path.join(output_folder, f"compilation_output_video{str(video_number)}.mp4")
 
@@ -108,7 +112,7 @@ def informative_video(video_number=1, width=1080, height=1920, aspect_ratio=(9, 
     temp_video_path_2 = output_path.replace("_temp1.mp4", "_temp2.mp4")
     burn_subtitles(temp_video_path_1, srt_path, temp_video_path_2)
     final_output_path = output_path.replace(".mp4", f"{main_query}_final.mp4")
-    merge_audio_video(video_path=temp_video_path_2, audio_path=audio_path, output_path=final_output_path)
+    merge_audio_video(video_path=temp_video_path_2, audio_path=audio_path, bgm_volume=bgm_volume, bgm_path=bgm_path, output_path=final_output_path)
 
     os.remove(temp_video_path_1)  # Clean temp file
     os.remove(temp_video_path_2)
@@ -123,27 +127,62 @@ def burn_subtitles(video_path, srt_path, output_path):
     font_size=80,
     color="white",
     method='caption',
-    size=video.size
+    size=video.size,
+    stroke_color = "black",
+    stroke_width = 3 
 )
     sub_clip = SubtitlesClip(srt_path, make_textclip=generator)
 
     result = CompositeVideoClip((video, sub_clip), size=video.size)
     result.write_videofile(output_path, fps=video.fps, temp_audiofile="temp-audio.m4a", remove_temp=True, codec="libx264", audio_codec="aac")
 
-def merge_audio_video(video_path, audio_path, output_path):
-    """Merges audio with the video."""
-    
+def merge_audio_video(video_path, audio_path, bgm_path, output_path, bgm_volume):
+    """Merges audio with the video and adds background music at 50% volume."""
+
     video_clip = VideoFileClip(video_path)
     
+    # Load the main audio (narration or voice-over)
+    main_audio = None
     if audio_path and os.path.exists(audio_path):
         try:
-            audio_clip = AudioFileClip(audio_path)
-            video_clip = video_clip.with_audio(audio_clip)
+            main_audio = AudioFileClip(audio_path)
         except Exception as e:
-            print(f"⚠️ Error loading audio: {e}. Proceeding with video only.")
+            print(f"⚠️ Error loading main audio: {e}. Proceeding without main audio.")
 
-    video_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", bitrate="5000k", fps=30)
-    print(f"✅ Final video saved: {output_path}")
+    # Load and adjust background music (BGM)
+    bgm_audio = None
+    if bgm_path and os.path.exists(bgm_path):
+        try:
+            bgm_audio = AudioFileClip(bgm_path)
+            if main_audio:
+                bgm_audio = bgm_audio.subclipped(0, main_audio.duration)  # Trim BGM to match main audio length
+            else:
+                bgm_audio = bgm_audio.subclipped(0, video_clip.duration)
+            bgm_audio = bgm_audio.with_volume_scaled(bgm_volume)  # Set BGM to 50% volume
+        except Exception as e:
+            print(f"⚠️ Error loading BGM: {e}. Proceeding without background music.")
+
+    # Combine audio tracks
+    if main_audio and bgm_audio:
+        final_audio = CompositeAudioClip((main_audio, bgm_audio))
+    elif main_audio:
+        final_audio = main_audio
+    elif bgm_audio:
+        final_audio = bgm_audio
+    else:
+        final_audio = None
+
+    # Attach final audio to the video
+    final_video = video_clip.with_audio(final_audio)
+
+    # Generate a unique filename
+    random_number = random.uniform(1, 10) * random.uniform(1, 10)
+    output_path = output_path.replace(".mp4", f"_{str(random_number).replace('.', '_')}.mp4")
+
+    # Export the final video
+    final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", bitrate="5000k", fps=30)
+    print(f"✅ Final video with main audio + BGM saved: {output_path}")
+
 
 
 
